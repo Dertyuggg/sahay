@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { supabase, isConfigured, memoryStore } = require('./supabaseClient');
 const { computeFrictionScore } = require('./frictionScore');
+const { executeTask } = require('./taskExecutor');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -196,7 +197,31 @@ app.get('/friction-score', async (req, res) => {
 });
 
 // ==========================================
-// Legacy / Mock Banking Routes (Preserved)
+// Banking Task Executor
+// Contract: POST /execute-task
+// { intent: "check_balance"|"send_money", params: {...} }
+// ==========================================
+app.post('/execute-task', async (req, res) => {
+  const { intent, params } = req.body;
+
+  if (!intent) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing required field: intent. Must be "check_balance" or "send_money".'
+    });
+  }
+
+  const result = await executeTask(intent, params || {});
+
+  if (!result.success) {
+    return res.status(400).json(result);
+  }
+
+  return res.json(result);
+});
+
+// ==========================================
+// Legacy / Mock Banking Routes (Preserved for backward compat)
 // ==========================================
 let users = {
   "user_1": {
