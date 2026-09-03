@@ -36,12 +36,24 @@ SAHAY-24 is a bank-website accessibility integration built for a 24-hour hackath
 
 ## 2. Team & Ownership
 
-| Track | Owner | Do not touch without asking |
-|---|---|---|
-| Accessibility markup, keyboard nav, detection logic | Dhyanesh | ARIA/semantic HTML retrofit, focus order, audio CAPTCHA, keyboard nav, screen-reader/friction detection |
-| Voice layer, plain-language UI | Oviam | TTS payment readback, ASR confirmation, plain-language mode UI |
+The primary developer interacting with the agent in this session is **Dhyanesh**.
 
-If an agent is asked to work on a file outside its assigned owner's track, flag this to the user before proceeding — cross-track changes should be intentional, not incidental.
+| Track | Owner | Scope & Responsibilities |
+|---|---|---|
+| **Backend / Friction Logic / Infra** | **Dhyanesh (Active User)** | • Supabase schema: `users`, `interaction_events`, `saved_contacts`, `mock_balances`<br>• Event ingestion: `POST /interaction-events`<br>• Friction scoring engine: `GET /friction-score`<br>• Banking task executor: `POST /execute-task`<br>• Backend edge cases, concurrency, and score hardening |
+| **Frontend / Adaptive UI / Voice** | **Oviam** | • Wireframes and 3 UI tiers: `standard`, `simplified`, `voice_offer`<br>• Client telemetry capture (taps, coordinates, retries)<br>• Voice assistant flow (ASR, TTS readback, confirm-before-act)<br>• Simulate struggle manual trigger button |
+
+**Important Rules for Dhyanesh's Agent:**
+1. **Default focus**: Prioritize Dhyanesh's backend, schema, scoring engine, and task execution endpoints.
+2. **Cross-track changes**: If asked to modify Oviam's frontend/voice files (`frontend/`), confirm with Dhyanesh before proceeding unless it is wiring contracts or requested explicitly.
+3. **Friction Scoring Contract**:
+   - Mis-tap near target: `+20` per occurrence
+   - Long hesitation (>8s idle): `+15`
+   - Repeated back-navigation (2+): `+20`
+   - Task abandon + retry within 2 min: `+25`
+   - Slow/erratic scrolling: `+10`
+   - Score Tiers: `<30` = `standard`, `30–59` = `simplified`, `≥60` = `voice_offer`
+4. **Git workflow**: Always checkout a new `feature/<short-description>` branch before writing any code!
 
 ---
 
