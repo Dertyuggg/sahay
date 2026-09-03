@@ -85,23 +85,29 @@ export function VoiceOffer() {
   const executeTask = async (intent) => {
     speak("Processing your request...");
     try {
-      if (intent.intent === 'check_balance') {
-        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/users/user_1`);
-        const data = await res.json();
-        speak(`Your balance is ${data.balance} dollars. Returning to dashboard.`);
-      } else if (intent.intent === 'send_money') {
-        const { amount, recipient } = intent.params;
-        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/users/user_1/transfer`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: recipient, amount: parseFloat(amount) })
-        });
-        const data = await res.json();
-        if (data.success) {
-          speak(`Successfully sent ${amount} dollars to ${recipient}. Returning to dashboard.`);
-        } else {
-          speak(`Error sending money: ${data.error}`);
-        }
+      const payload = {
+        intent: intent.intent,
+        params: { user_id: 'user_1' }
+      };
+
+      if (intent.intent === 'send_money') {
+        payload.params.contact_name = intent.params.recipient;
+        payload.params.amount = parseFloat(intent.params.amount);
+      }
+
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/execute-task`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (data.success && data.data && data.data.readback) {
+        speak(`${data.data.readback} Returning to dashboard.`);
+      } else if (!data.success) {
+        speak(`Error executing task: ${data.error || 'Unknown error'}`);
+      } else {
+        speak("Task completed successfully. Returning to dashboard.");
       }
     } catch (err) {
       console.error(err);

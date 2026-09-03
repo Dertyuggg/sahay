@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAccessibility } from './hooks/useAccessibility';
+import { useTelemetry } from './hooks/useTelemetry';
 import { AccessibleButton } from './components/AccessibleButton';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
@@ -18,6 +19,39 @@ function App() {
     uiTier,
     setUiTier
   } = useAccessibility();
+  
+  const { events, logEvent } = useTelemetry();
+
+  // Dynamically check friction score and switch UI tier
+  useEffect(() => {
+    const checkFriction = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/friction-score?user_id=user_1`);
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        // Auto-switch based on score if not already in that tier.
+        // We avoid auto-downgrading from voice_offer for the demo's sake, but we can just blindly trust the backend tier.
+        if (data.tier && data.tier !== uiTier) {
+          // If we manually selected voice_offer, don't revert to simplified immediately
+          if (!(uiTier === 'voice_offer' && data.tier !== 'voice_offer')) {
+             setUiTier(data.tier);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch friction score', err);
+      }
+    };
+    checkFriction();
+  }, [events.length, setUiTier, uiTier]);
+
+  const simulateStruggle = () => {
+    // Force high friction score (+60 or more) to trigger voice_offer
+    logEvent('mistap', { source: 'simulate_struggle' });
+    setTimeout(() => logEvent('mistap', { source: 'simulate_struggle' }), 100);
+    setTimeout(() => logEvent('mistap', { source: 'simulate_struggle' }), 200);
+    setTimeout(() => logEvent('hesitation', { duration_ms: 10000 }), 300);
+  };
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 20px' }}>
@@ -46,6 +80,16 @@ function App() {
         <AccessibleButton onClick={toggleHighContrast} ariaLabel="Toggle High Contrast Mode" variant="secondary">
           🌓 Toggle Contrast
         </AccessibleButton>
+        
+        <AccessibleButton 
+          onClick={simulateStruggle} 
+          ariaLabel="Simulate Struggle for Demo" 
+          variant="secondary"
+          style={{ backgroundColor: 'var(--error-color)', color: 'white', border: 'none' }}
+        >
+          🚨 Simulate Struggle
+        </AccessibleButton>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
           <label htmlFor="tier-select" style={{ fontWeight: 'bold' }}>UI Tier:</label>
           <select 
