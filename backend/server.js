@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { supabase, isConfigured, memoryStore } = require('./supabaseClient');
+const { computeFrictionScore } = require('./frictionScore');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -145,6 +146,53 @@ app.get('/interaction-events', async (req, res) => {
     .slice(0, Number(limit));
 
   res.json({ events, source: 'memory' });
+});
+
+// ==========================================
+// Friction Score Engine
+// Contract: GET /friction-score?user_id=...
+// ==========================================
+app.get('/friction-score', async (req, res) => {
+  const { user_id } = req.query;
+
+  if (!user_id) {
+    return res.status(400).json({ error: 'Query parameter "user_id" is required' });
+  }
+
+  let events = [];
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('interaction_events')
+        .select('*')
+        .eq('user_id', user_id)
+        .order('timestamp', { ascending: false })
+        .limit(200);
+
+      if (!error && data) {
+        events = data;
+      } else {
+        console.warn('[SAHAY-24] Supabase select warning (scoring fallback to memory):', error?.message);
+        events = memoryStore.interaction_events.filter(e => e.user_id === user_id);
+      }
+    } catch (err) {
+      console.error('[SAHAY-24] Supabase query error:', err.message);
+      events = memoryStore.interaction_events.filter(e => e.user_id === user_id);
+    }
+  } else {
+    events = memoryStore.interaction_events.filter(e => e.user_id === user_id);
+  }
+
+  const result = computeFrictionScore(events);
+
+  res.json({
+    user_id,
+    score: result.score,
+    tier: result.tier,
+    breakdown: result.breakdown,
+    event_count: events.length
+  });
 });
 
 // ==========================================

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node test_events.js"
+    "test": "node test_friction.js && node test_events.js"
   },
   "keywords": [],
   "author": "",
