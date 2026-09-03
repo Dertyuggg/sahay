@@ -4,12 +4,15 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 import { AccessibilityProvider } from './hooks/useAccessibility.jsx'
+import { TelemetryProvider } from './hooks/useTelemetry.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
       <AccessibilityProvider>
-        <App />
+        <TelemetryProvider>
+          <App />
+        </TelemetryProvider>
       </AccessibilityProvider>
     </BrowserRouter>
   </StrictMode>,
