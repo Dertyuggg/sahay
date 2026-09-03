@@ -28,3 +28,27 @@ cd backend
 npm install
 npm start
 ```
+
+## Stage 0 Alignment Contracts
+
+**Agreed Banking Flows:**
+1. Balance Check
+2. Send Money to Saved Contact
+
+**Interaction Event Schema & Friction Score Contract:**
+```json
+POST /interaction-events
+{ 
+  "user_id": "string",
+  "event_type": "mistap"|"hesitation"|"back_nav"|"abandon_retry"|"erratic_scroll",
+  "screen_id": "string",
+  "timestamp": "string",
+  "meta": {} 
+}
+
+GET /friction-score?user_id=...
+-> { 
+  "score": "number", 
+  "tier": "standard"|"simplified"|"voice_offer" 
+}
+```
