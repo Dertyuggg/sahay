@@ -1,0 +1,41 @@
+◇ injected env (4) from ../.env // tip: ⌘ override existing { override: true }
+◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+[SAHAY-24] Supabase credentials not set or incomplete in .env.
+[SAHAY-24] Running in-memory storage fallback for interaction events.
+SAHAY-24 Backend running on http://localhost:3001
+Supabase integration status: IN-MEMORY FALLBACK
+Error proxying to Whisper: RateLimitError: 429 You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.
+    at APIError.generate (/home/ovian/Desktop/sahay/node_modules/openai/core/error.js:63:20)
+    at OpenAI.makeStatusError (/home/ovian/Desktop/sahay/node_modules/openai/client.js:411:32)
+    at OpenAI.makeRequest (/home/ovian/Desktop/sahay/node_modules/openai/client.js:885:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async /home/ovian/Desktop/sahay/backend/server.js:337:27 {
+  status: 429,
+  headers: Headers {
+    date: 'Thu, 03 Sep 2026 17:37:57 GMT',
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': '283',
+    connection: 'keep-alive',
+    vary: 'Origin',
+    'x-request-id': 'req_01e2b8841b354cf082584e1c01ff61d1',
+    'x-openai-proxy-wasm': 'v0.1',
+    server: 'cloudflare',
+    'cf-cache-status': 'DYNAMIC',
+    'access-control-expose-headers': 'CF-Ray',
+    'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
+    'x-content-type-options': 'nosniff',
+    'set-cookie': '__cf_bm=BY0TBlF05UEalJvCxm1lNW042P9oEtjF9MyLkS3Ueio-1788457077.1604998-1.0.1.1-5eBmPc2PiJrs4B8tt6bvgpxBxd6yJOEGrHJIPxGbdzCwJQ6J7Ea23852QJw.99ujBLnEz8.p4VENKouxy7vewhyqPZGfG2Z0B2.VN4M9DVWLR9YstwNOP_vaQJNvSpJl; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Thu, 03 Sep 2026 18:07:57 GMT',
+    'cf-ray': 'a356867c3a1b7e97-MAA',
+    'alt-svc': 'h3=":443"; ma=86400'
+  },
+  requestID: 'req_01e2b8841b354cf082584e1c01ff61d1',
+  error: {
+    message: 'You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.',
+    type: 'insufficient_quota',
+    param: null,
+    code: 'credit_balance_exhausted'
+  },
+  code: 'credit_balance_exhausted',
+  param: null,
+  type: 'insufficient_quota'
+}

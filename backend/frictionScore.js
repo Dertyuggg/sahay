@@ -45,7 +45,15 @@ function computeFrictionScore(events) {
     erratic_scroll: 0,
   };
 
+  // Only consider events from the last 15 minutes
+  const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
+
   for (const event of events) {
+    // Skip events older than 15 minutes
+    if (new Date(event.timestamp).getTime() < fifteenMinutesAgo) {
+      continue;
+    }
+
     switch (event.event_type) {
       case 'mistap':
         breakdown.mistap += 1;

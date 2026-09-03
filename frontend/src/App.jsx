@@ -1,28 +1,38 @@
-import React, { useEffect } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useAccessibility } from './hooks/useAccessibility';
+import React, { useEffect, useState } from 'react';
+import { HomeView } from './views/HomeView';
+import { TransferFlow } from './views/TransferFlow';
+import { PassbookView } from './views/PassbookView';
+import { ProfileView } from './views/ProfileView';
+import { BalanceDetailView } from './views/BalanceDetailView';
+import { ContactsView } from './views/ContactsView';
+import { BottomNav } from './components/Shared';
+import { VoiceAssistantOverlay } from './components/VoiceOverlay';
+import { MOCK_PAYEES } from './types';
+import { soundFX } from './utils/speech';
 import { useTelemetry } from './hooks/useTelemetry';
-import { AccessibleButton } from './components/AccessibleButton';
-import { Login } from './pages/Login';
-import { Dashboard } from './pages/Dashboard';
-import { SendMoney } from './pages/SendMoney';
-import { VoiceOffer } from './components/VoiceOffer';
-import './index.css';
 
-function App() {
-  const location = useLocation();
-  const { 
-    increaseFontSize, 
-    decreaseFontSize, 
-    toggleHighContrast, 
-    speak,
-    uiTier,
-    setUiTier
-  } = useAccessibility();
-  
+export default function App() {
+  const [state, setState] = useState({
+    currentView: 'home',
+    accountBalance: 24850,
+    selectedPayee: MOCK_PAYEES[0],
+    transferAmount: 500,
+    transferReason: 'Household & Family',
+    isVoiceActive: false,
+    voiceTranscript: '',
+    frictionScore: 48,
+    isLanguageSelectionOpen: false,
+    currentLanguage: 'en',
+    lastTransferSuccess: null,
+    voiceHasBeenOffered: false
+  });
+
   const { events, logEvent } = useTelemetry();
 
-  // Dynamically check friction score and switch UI tier
+  const updateState = (updates) => {
+    setState(prev => ({ ...prev, ...updates }));
+  };
+
   useEffect(() => {
     const checkFriction = async () => {
       try {
@@ -30,91 +40,124 @@ function App() {
         if (!res.ok) return;
         const data = await res.json();
         
-        // Auto-switch based on score if not already in that tier.
-        // We avoid auto-downgrading from voice_offer for the demo's sake, but we can just blindly trust the backend tier.
-        if (data.tier && data.tier !== uiTier) {
-          // If we manually selected voice_offer, don't revert to simplified immediately
-          if (!(uiTier === 'voice_offer' && data.tier !== 'voice_offer')) {
-             setUiTier(data.tier);
-          }
+        updateState({ frictionScore: data.score });
+        
+        if (data.score >= 60 && !state.isVoiceActive && !state.voiceHasBeenOffered) {
+          updateState({ isVoiceActive: true, voiceHasBeenOffered: true });
         }
       } catch (err) {
         console.error('Failed to fetch friction score', err);
       }
     };
     checkFriction();
-  }, [events.length, setUiTier, uiTier]);
+  }, [events.length, state.isVoiceActive, state.voiceHasBeenOffered]);
 
   const simulateStruggle = () => {
-    // Force high friction score (+60 or more) to trigger voice_offer
     logEvent('mistap', { source: 'simulate_struggle' });
     setTimeout(() => logEvent('mistap', { source: 'simulate_struggle' }), 100);
     setTimeout(() => logEvent('mistap', { source: 'simulate_struggle' }), 200);
     setTimeout(() => logEvent('hesitation', { duration_ms: 10000 }), 300);
   };
 
+  const handleNavigate = (view, payee) => {
+    soundFX.playTap();
+    if (view === 'home' && (state.currentView === 'send_money_amount' || state.currentView === 'confirm_transfer')) {
+        logEvent('back_nav', { from: state.currentView, to: view });
+    }
+    if (payee) {
+      updateState({ currentView: view, selectedPayee: payee });
+    } else {
+      updateState({ currentView: view });
+    }
+  };
+
+  const handleVoiceToggle = () => {
+    soundFX.playTap();
+    updateState({ isVoiceActive: !state.isVoiceActive });
+  };
+
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 20px' }}>
-      <header>
-        <h1 tabIndex="0">SAHAY-24 Banking</h1>
-        <p tabIndex="0" style={{ fontSize: '1.2rem', marginBottom: '32px' }}>
-          Welcome back, Arthur. Accessible banking made simple.
-        </p>
-      </header>
-      
-      <section aria-label="Accessibility Controls" style={{ 
-        display: 'flex', 
-        gap: '16px', 
-        flexWrap: 'wrap', 
-        marginBottom: '40px',
-        padding: '20px',
-        backgroundColor: 'rgba(128,128,128,0.1)',
-        borderRadius: '12px'
-      }}>
-        <AccessibleButton onClick={increaseFontSize} ariaLabel="Increase text size" variant="secondary">
-          A+ Text
-        </AccessibleButton>
-        <AccessibleButton onClick={decreaseFontSize} ariaLabel="Decrease text size" variant="secondary">
-          A- Text
-        </AccessibleButton>
-        <AccessibleButton onClick={toggleHighContrast} ariaLabel="Toggle High Contrast Mode" variant="secondary">
-          🌓 Toggle Contrast
-        </AccessibleButton>
+    <div className="min-h-screen bg-slate-900 text-brand-text-dark font-sans flex justify-center selection:bg-brand-teal selection:text-white">
+      {/* Mobile Shell Wrapper */}
+      <div className="w-full max-w-lg bg-brand-surface min-h-screen shadow-2xl relative flex flex-col">
+        {/* Active Screen View */}
+        {state.currentView === 'home' && (
+          <HomeView 
+            balance={state.accountBalance}
+            onNavigate={handleNavigate}
+            onVoiceClick={handleVoiceToggle}
+          />
+        )}
+
+        {(state.currentView === 'send_money_amount' || 
+          state.currentView === 'confirm_transfer' || 
+          state.currentView === 'success') && (
+          <TransferFlow 
+            state={state} 
+            updateState={updateState} 
+            onNavigate={handleNavigate} 
+          />
+        )}
+
+        {state.currentView === 'passbook' && (
+          <PassbookView 
+            balance={state.accountBalance}
+            onBack={() => handleNavigate('home')}
+            onSendMoney={() => handleNavigate('send_money_amount')}
+            onOpenProfile={() => handleNavigate('profile')}
+          />
+        )}
+
+        {state.currentView === 'profile' && (
+          <ProfileView 
+            onBack={() => handleNavigate('home')}
+            onOpenPassbook={() => handleNavigate('passbook')}
+          />
+        )}
+
+        {state.currentView === 'balance_detail' && (
+          <BalanceDetailView 
+            balance={state.accountBalance}
+            onBack={() => handleNavigate('home')}
+            onSendMoney={() => handleNavigate('send_money_amount')}
+            onOpenProfile={() => handleNavigate('profile')}
+          />
+        )}
+
+        {state.currentView === 'contacts' && (
+          <ContactsView 
+            onBack={() => handleNavigate('home')}
+            onSelectPayee={(payee) => handleNavigate('send_money_amount', payee)}
+            onOpenProfile={() => handleNavigate('profile')}
+          />
+        )}
+
+        {/* Global Bottom Navigation (persistent across main views) */}
+        {state.currentView !== 'success' && state.currentView !== 'confirm_transfer' && (
+          <BottomNav 
+            currentView={state.currentView} 
+            onChangeView={handleNavigate} 
+            onVoiceClick={handleVoiceToggle} 
+          />
+        )}
+
+        {/* Full Screen Voice AI Overlay */}
+        <VoiceAssistantOverlay 
+          state={state} 
+          updateState={updateState} 
+          onNavigate={handleNavigate} 
+        />
         
-        <AccessibleButton 
-          onClick={simulateStruggle} 
-          ariaLabel="Simulate Struggle for Demo" 
-          variant="secondary"
-          style={{ backgroundColor: 'var(--error-color)', color: 'white', border: 'none' }}
+        {/* Floating Simulate Struggle Button for Demo */}
+        <button
+          onClick={simulateStruggle}
+          style={{ position: 'fixed', top: '10px', right: '10px', zIndex: 100 }}
+          className="bg-red-600 text-white px-3 py-2 rounded-full text-xs font-bold shadow-lg opacity-80 hover:opacity-100 focus:ring-4 focus:ring-red-300"
+          aria-label="Simulate Struggle for Demo"
         >
           🚨 Simulate Struggle
-        </AccessibleButton>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
-          <label htmlFor="tier-select" style={{ fontWeight: 'bold' }}>UI Tier:</label>
-          <select 
-            id="tier-select"
-            value={uiTier} 
-            onChange={(e) => setUiTier(e.target.value)}
-            style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-color)', color: 'var(--text-color)' }}
-          >
-            <option value="standard">Standard</option>
-            <option value="simplified">Simplified</option>
-            <option value="voice_offer">Voice Offer</option>
-          </select>
-        </div>
-      </section>
-
-      {uiTier === 'voice_offer' && <VoiceOffer />}
-
-      <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/send-money" element={<SendMoney />} />
-      </Routes>
+        </button>
+      </div>
     </div>
   );
 }
-
-export default App;
