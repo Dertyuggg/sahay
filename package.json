@@ -1,0 +1,17 @@
+{
+  "name": "sahay-24",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "start": "concurrently \"npm start -w backend\" \"npm run preview -w frontend\"",
+    "build": "npm run build -w frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

@@ -1,0 +1,50 @@
+:root {
+  /* High contrast colors by default */
+  --bg-color: #121212;
+  --text-color: #ffffff;
+  --primary-color: #FFD700; /* High visibility yellow */
+  --secondary-color: #00BFFF; /* High visibility blue */
+  --error-color: #FF4500;
+  --success-color: #32CD32;
+  
+  /* Font size variables, configurable via js */
+  --base-font-size: 18px;
+  --font-multiplier: 1;
+
+  /* Hit areas */
+  --min-tap-target: 44px;
+}
+
+[data-theme='light'] {
+  --bg-color: #ffffff;
+  --text-color: #121212;
+  --primary-color: #0056b3; /* Deep blue for light mode */
+  --secondary-color: #d81b60; 
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: calc(var(--base-font-size) * var(--font-multiplier));
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 0;
+  line-height: 1.2;
+}
+
+button, a {
+  cursor: pointer;
+  min-height: var(--min-tap-target);
+  min-width: var(--min-tap-target);
+}
+
+/* Highly visible focus state for keyboard users */
+*:focus-visible {
+  outline: 4px solid var(--primary-color);
+  outline-offset: 4px;
+}
