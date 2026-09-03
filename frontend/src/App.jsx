@@ -5,6 +5,7 @@ import { AccessibleButton } from './components/AccessibleButton';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { SendMoney } from './pages/SendMoney';
+import { VoiceOffer } from './components/VoiceOffer';
 import './index.css';
 
 function App() {
@@ -13,7 +14,9 @@ function App() {
     increaseFontSize, 
     decreaseFontSize, 
     toggleHighContrast, 
-    speak 
+    speak,
+    uiTier,
+    setUiTier
   } = useAccessibility();
 
   return (
@@ -43,7 +46,22 @@ function App() {
         <AccessibleButton onClick={toggleHighContrast} ariaLabel="Toggle High Contrast Mode" variant="secondary">
           🌓 Toggle Contrast
         </AccessibleButton>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+          <label htmlFor="tier-select" style={{ fontWeight: 'bold' }}>UI Tier:</label>
+          <select 
+            id="tier-select"
+            value={uiTier} 
+            onChange={(e) => setUiTier(e.target.value)}
+            style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-color)', color: 'var(--text-color)' }}
+          >
+            <option value="standard">Standard</option>
+            <option value="simplified">Simplified</option>
+            <option value="voice_offer">Voice Offer</option>
+          </select>
+        </div>
       </section>
+
+      {uiTier === 'voice_offer' && <VoiceOffer />}
 
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />

@@ -11,9 +11,10 @@ export const TelemetryProvider = ({ children }) => {
   const lastLocationRef = useRef(location.pathname);
   const idleTimerRef = useRef(null);
 
-  // Function to log an event locally
-  const logEvent = (eventType, meta = {}) => {
+  // Function to log an event locally and send to backend
+  const logEvent = async (eventType, meta = {}) => {
     const newEvent = {
+      user_id: 'user_1', // Hardcoded as per spec for now
       event_type: eventType,
       screen_id: window.location.pathname,
       timestamp: new Date().toISOString(),
@@ -25,6 +26,17 @@ export const TelemetryProvider = ({ children }) => {
       console.log('Telemetry Event Logged:', newEvent);
       return updated;
     });
+
+    // POST to backend
+    try {
+      await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/interaction-events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newEvent)
+      });
+    } catch (err) {
+      console.error('Failed to post telemetry event:', err);
+    }
   };
 
   // Track Clicks / Mis-taps

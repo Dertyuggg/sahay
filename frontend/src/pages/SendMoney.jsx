@@ -5,7 +5,7 @@ import { useAccessibility } from '../hooks/useAccessibility';
 
 export function SendMoney() {
   const navigate = useNavigate();
-  const { speak } = useAccessibility();
+  const { speak, uiTier } = useAccessibility();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState(null);
@@ -50,39 +50,44 @@ export function SendMoney() {
         {status && <p>{status}</p>}
       </div>
 
-      <form onSubmit={handleSend} style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '400px' }}>
+      <form onSubmit={handleSend} style={{ display: 'flex', flexDirection: 'column', gap: uiTier === 'simplified' ? '32px' : '16px', maxWidth: '400px' }}>
         <div>
-          <label htmlFor="recipient" style={{ display: 'block', marginBottom: '8px' }}>Recipient Name</label>
+          <label htmlFor="recipient" style={{ display: 'block', marginBottom: '8px', fontSize: uiTier === 'simplified' ? '1.5rem' : '1rem' }}>
+            {uiTier === 'simplified' ? "Who to send to:" : "Recipient Name"}
+          </label>
           <input 
             id="recipient" 
             type="text" 
             aria-required="true"
             value={recipient}
             onChange={(e) => setRecipient(e.target.value)}
-            style={{ width: '100%', padding: '12px', fontSize: '1.2rem' }}
+            style={{ width: '100%', padding: uiTier === 'simplified' ? '20px' : '12px', fontSize: uiTier === 'simplified' ? '1.5rem' : '1.2rem' }}
           />
         </div>
         <div>
-          <label htmlFor="amount" style={{ display: 'block', marginBottom: '8px' }}>Amount (in dollars)</label>
+          <label htmlFor="amount" style={{ display: 'block', marginBottom: '8px', fontSize: uiTier === 'simplified' ? '1.5rem' : '1rem' }}>
+            {uiTier === 'simplified' ? "How much:" : "Amount (in dollars)"}
+          </label>
           <input 
             id="amount" 
             type="number" 
             min="1"
-            step="0.01"
+            step={uiTier === 'simplified' ? "1" : "0.01"}
             aria-required="true"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            style={{ width: '100%', padding: '12px', fontSize: '1.2rem' }}
+            style={{ width: '100%', padding: uiTier === 'simplified' ? '20px' : '12px', fontSize: uiTier === 'simplified' ? '1.5rem' : '1.2rem' }}
           />
         </div>
-        <AccessibleButton type="submit" ariaLabel="Confirm and send money">
-          Send Money
+        <AccessibleButton type="submit" ariaLabel="Confirm and send money" style={uiTier === 'simplified' ? { fontSize: '1.5rem', padding: '24px' } : {}}>
+          Send
         </AccessibleButton>
         <AccessibleButton 
           type="button" 
           variant="secondary"
           onClick={() => navigate('/dashboard')}
           ariaLabel="Cancel and return to dashboard"
+          style={uiTier === 'simplified' ? { fontSize: '1.5rem', padding: '24px' } : {}}
         >
           Cancel
         </AccessibleButton>

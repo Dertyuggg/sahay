@@ -5,6 +5,7 @@ const AccessibilityContext = createContext();
 export const AccessibilityProvider = ({ children }) => {
   const [fontSize, setFontSize] = useState(1);
   const [isHighContrast, setIsHighContrast] = useState(true);
+  const [uiTier, setUiTier] = useState("standard"); // "standard" | "simplified" | "voice_offer"
   
   // Apply font size multiplier to root
   useEffect(() => {
@@ -34,7 +35,8 @@ export const AccessibilityProvider = ({ children }) => {
     <AccessibilityContext.Provider value={{
       fontSize, increaseFontSize, decreaseFontSize,
       isHighContrast, toggleHighContrast,
-      speak
+      speak,
+      uiTier, setUiTier
     }}>
       {children}
     </AccessibilityContext.Provider>
