@@ -18,7 +18,7 @@ const VALID_EVENT_TYPES = new Set([
 ]);
 
 // Fallback user ID for testing
-const DEFAULT_USER_ID = '11111111-1111-1111-1111-111111111111';
+const DEFAULT_USER_ID = 'e1111111-1111-1111-1111-111111111111';
 
 // Middleware
 app.use(cors());
@@ -34,66 +34,95 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// 1. Get user and balance (from HEAD / Supabase)
+// 1. Get user and balance
 app.get('/api/users/:id', async (req, res) => {
   const userId = req.params.id === 'user_1' ? DEFAULT_USER_ID : req.params.id;
 
-  try {
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('*, mock_balances(balance)')
-      .eq('id', userId)
-      .single();
+  if (supabase && isConfigured) {
+    try {
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('*, mock_balances(balance)')
+        .eq('id', userId)
+        .single();
 
-    if (userError) throw userError;
-    if (!user) return res.status(404).json({ error: "User not found" });
+      if (userError) throw userError;
+      if (!user) return res.status(404).json({ error: "User not found" });
 
-    const formattedUser = {
-      id: user.id,
-      name: user.name,
-      balance: user.mock_balances?.[0]?.balance || 0,
-    };
+      const formattedUser = {
+        id: user.id,
+        name: user.name,
+        balance: user.mock_balances?.[0]?.balance || 0,
+      };
 
-    res.json(formattedUser);
-  } catch (error) {
-    console.error('Error fetching user:', error);
-    res.status(500).json({ error: "Internal server error" });
+      return res.json(formattedUser);
+    } catch (error) {
+      console.error('Error fetching user from Supabase:', error);
+      // Fallback below
+    }
   }
+
+  // Memory fallback
+  const user = memoryStore.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: "User not found in memory" });
+  
+  const bal = memoryStore.mock_balances.find(b => b.user_id === userId);
+  
+  const formattedUser = {
+    id: user.id,
+    name: user.name,
+    balance: bal ? bal.balance : 0,
+  };
+  
+  res.json(formattedUser);
 });
 
-// 2. Transfer money (from HEAD / Supabase)
+// 2. Transfer money
 app.post('/api/users/:id/transfer', async (req, res) => {
   const userId = req.params.id === 'user_1' ? DEFAULT_USER_ID : req.params.id;
   const { amount, to } = req.body;
 
-  try {
-    const { data: balanceData, error: balanceError } = await supabase
-      .from('mock_balances')
-      .select('balance, id')
-      .eq('user_id', userId)
-      .single();
+  if (supabase && isConfigured) {
+    try {
+      const { data: balanceData, error: balanceError } = await supabase
+        .from('mock_balances')
+        .select('balance, id')
+        .eq('user_id', userId)
+        .single();
 
-    if (balanceError) throw balanceError;
-    if (!balanceData) return res.status(404).json({ error: "Balance not found" });
+      if (balanceError) throw balanceError;
+      if (!balanceData) return res.status(404).json({ error: "Balance not found" });
 
-    if (balanceData.balance < amount) {
-      return res.status(400).json({ error: "Insufficient funds" });
+      if (balanceData.balance < amount) {
+        return res.status(400).json({ error: "Insufficient funds" });
+      }
+
+      const newBalance = balanceData.balance - amount;
+
+      const { error: updateError } = await supabase
+        .from('mock_balances')
+        .update({ balance: newBalance, updated_at: new Date().toISOString() })
+        .eq('id', balanceData.id);
+
+      if (updateError) throw updateError;
+      
+      return res.json({ success: true, balance: newBalance });
+    } catch (error) {
+      console.error('Error processing transfer in Supabase:', error);
+      // Fallback below
     }
-
-    const newBalance = balanceData.balance - amount;
-
-    const { error: updateError } = await supabase
-      .from('mock_balances')
-      .update({ balance: newBalance, updated_at: new Date().toISOString() })
-      .eq('id', balanceData.id);
-
-    if (updateError) throw updateError;
-    
-    res.json({ success: true, balance: newBalance });
-  } catch (error) {
-    console.error('Error processing transfer:', error);
-    res.status(500).json({ error: "Internal server error" });
   }
+
+  // Memory fallback
+  const bal = memoryStore.mock_balances.find(b => b.user_id === userId);
+  if (!bal) return res.status(404).json({ error: "Balance not found in memory" });
+  
+  if (bal.balance < amount) {
+    return res.status(400).json({ error: "Insufficient funds" });
+  }
+  
+  bal.balance -= amount;
+  res.json({ success: true, balance: bal.balance });
 });
 
 // ==========================================
@@ -273,6 +302,11 @@ app.post('/execute-task', async (req, res) => {
       success: false,
       error: 'Missing required field: intent. Must be "check_balance" or "send_money".'
     });
+  }
+  
+  // Apply mapping if missing user_id in params but we know it's a mock test
+  if (params && params.user_id === 'user_1') {
+    params.user_id = DEFAULT_USER_ID;
   }
 
   const result = await executeTask(intent, params || {});
