@@ -4,6 +4,7 @@ const cors = require('cors');
 const { supabase, isConfigured, memoryStore } = require('./supabaseClient');
 const { computeFrictionScore } = require('./frictionScore');
 const { executeTask } = require('./taskExecutor');
+const { parseBankingIntent, generateText, streamText } = require('./geminiService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -287,6 +288,26 @@ app.get('/friction-score', async (req, res) => {
     breakdown: result.breakdown,
     event_count: events.length
   });
+});
+
+// ==========================================
+// Gemini NLP Intent Parser
+// Contract: POST /api/parse-intent
+// { text: "natural language input" }
+// ==========================================
+app.post('/api/parse-intent', async (req, res) => {
+  const { text } = req.body;
+  if (!text || typeof text !== 'string') {
+    return res.status(400).json({ error: 'Missing required field: text' });
+  }
+
+  try {
+    const result = await parseBankingIntent(text);
+    return res.json({ success: true, result });
+  } catch (err) {
+    console.error('[SAHAY-24] Parse Intent Error:', err.message);
+    return res.status(500).json({ error: 'Failed to parse intent', details: err.message });
+  }
 });
 
 // ==========================================
