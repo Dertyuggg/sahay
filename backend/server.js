@@ -1,14 +1,9 @@
 require('dotenv').config({ path: '../.env' }); // Load from root
 const express = require('express');
 const cors = require('cors');
-<<<<<<< Updated upstream
-=======
-const multer = require('multer');
->>>>>>> Stashed changes
 const { supabase, isConfigured, memoryStore } = require('./supabaseClient');
 const { computeFrictionScore } = require('./frictionScore');
 const { executeTask } = require('./taskExecutor');
-const { InferenceClient } = require("@huggingface/inference");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -323,47 +318,6 @@ app.post('/execute-task', async (req, res) => {
   return res.json(result);
 });
 
-<<<<<<< Updated upstream
-=======
-// ==========================================
-// Voice Transcription Proxy
-// Contract: POST /api/transcribe
-// ==========================================
-app.post('/api/transcribe', upload.single('file'), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'No audio file provided' });
-  }
-
-  try {
-    const hfToken = process.env.HF_TOKEN;
-    if (!hfToken) {
-      return res.status(500).json({ error: 'Hugging Face API is not configured' });
-    }
-
-    const client = new InferenceClient(hfToken);
-    
-    // The HF client expects a standard Web Blob, not a Node Buffer
-    let mimeType = req.file.mimetype;
-    if (!mimeType || mimeType === 'application/octet-stream') {
-      mimeType = 'audio/webm';
-    }
-    const fileBlob = new Blob([req.file.buffer], { type: mimeType });
-
-    const result = await client.automaticSpeechRecognition({
-      model: process.env.HF_MODEL || "openai/whisper-large-v3",
-      data: fileBlob,
-      provider: process.env.HF_PROVIDER || "auto"
-    });
-
-    // result should have a `text` property with the transcription
-    return res.json({ text: result.text });
-  } catch (error) {
-    console.error('Error proxying to Hugging Face Whisper:', error);
-    return res.status(500).json({ error: 'Speech transcription failed' });
-  }
-});
-
->>>>>>> Stashed changes
 // Start Server
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {

@@ -117,9 +117,19 @@ export function speakEnglish(text, onEnd) {
     }
 
     if (onEnd) {
-      utterance.onend = () => onEnd();
-      utterance.onerror = () => onEnd();
+      utterance.onend = () => {
+        onEnd();
+        window.activeUtterances = window.activeUtterances.filter(u => u !== utterance);
+      };
+      utterance.onerror = () => {
+        onEnd();
+        window.activeUtterances = window.activeUtterances.filter(u => u !== utterance);
+      };
     }
+
+    // Fix for Chrome garbage collection bug that drops onend events
+    window.activeUtterances = window.activeUtterances || [];
+    window.activeUtterances.push(utterance);
 
     window.speechSynthesis.speak(utterance);
     return true;

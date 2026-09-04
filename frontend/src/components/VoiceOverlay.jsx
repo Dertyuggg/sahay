@@ -6,12 +6,13 @@ import { speakEnglish, stopSpeaking, soundFX } from '../utils/speech';
 export function VoiceAssistantOverlay({ state, updateState, onNavigate }) {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState('');
   const [statusMessage, setStatusMessage] = useState('Listening to your voice...');
   const [aiSpokenReply, setAiSpokenReply] = useState('');
   const [isSpeakingResponse, setIsSpeakingResponse] = useState(false);
   const [recognizedAction, setRecognizedAction] = useState(null);
   
-  const mediaRecorderRef = useRef(null);
+  const recognitionRef = useRef(null);
   const isNavigatingRef = useRef(false);
 
   const processVoiceCommand = useCallback(async (spokenText) => {
@@ -23,66 +24,88 @@ export function VoiceAssistantOverlay({ state, updateState, onNavigate }) {
     setStatusMessage('Understanding what you need...');
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/execute-task`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: 'user_1',
-          command: spokenText
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Backend failed to process command');
-      }
-
-      const data = await response.json();
-      const aiReply = data.readback || "I'm sorry, I couldn't understand that.";
-      setAiSpokenReply(aiReply);
-      
+      let intent = 'unknown';
+      let params = { user_id: 'user_1' };
+      let aiReply = '';
       let title = 'Action';
       let details = '';
       let actionFn = () => {};
 
-      if (data.intent === 'check_balance') {
-         title = 'Check Account Balance';
-         details = `Available: ₹${state.accountBalance.toLocaleString()}.00`;
-         actionFn = () => { updateState({ isVoiceActive: false }); onNavigate('balance_detail'); };
-      } else if (data.intent === 'transfer_money') {
-         const payee = MOCK_PAYEES.find(p => p.name.toLowerCase().includes(data.parameters?.payee?.toLowerCase() || '')) || MOCK_PAYEES[0];
-         const amount = data.parameters?.amount || 500;
-         title = `Send ₹${amount} to ${payee.name}`;
-         details = `Debiting from Pension Account •••• 4821`;
-         actionFn = () => {
-           updateState({
-             selectedPayee: payee,
-             transferAmount: amount,
-             voiceTranscript: spokenText,
-             currentView: 'confirm_transfer',
-             isVoiceActive: false
-           });
-         };
-      } else if (data.intent === 'show_statement' || text.includes('passbook')) {
-         title = 'View Passbook & Statement';
-         details = 'Reviewing recent credits and debits';
-         actionFn = () => { updateState({ isVoiceActive: false }); onNavigate('passbook'); };
+      if (text.includes('balance')) {
+        intent = 'check_balance';
+      } else if (text.includes('send') || text.includes('transfer') || text.includes('pay')) {
+        intent = 'send_money';
+        const amountMatch = text.match(/\d+/);
+        params.amount = amountMatch ? parseInt(amountMatch[0], 10) : 500;
+        const matchedPayee = MOCK_PAYEES.find(p => text.includes(p.name.toLowerCase()));
+        params.contact_name = matchedPayee ? matchedPayee.name : 'Ananya';
+      } else if (text.includes('passbook') || text.includes('statement')) {
+        intent = 'show_statement';
       } else if (text.includes('profile')) {
-         title = 'Open Profile & Care Manager';
-         actionFn = () => { updateState({ isVoiceActive: false }); onNavigate('profile'); };
+        intent = 'profile';
       } else if (text.includes('contact')) {
-         title = 'Open Trusted Contacts';
-         actionFn = () => { updateState({ isVoiceActive: false }); onNavigate('contacts'); };
+        intent = 'contact';
       } else if (text.includes('home')) {
-         title = 'Return to Home';
-         actionFn = () => { updateState({ isVoiceActive: false }); onNavigate('home'); };
+        intent = 'home';
+      }
+
+      if (intent === 'check_balance' || intent === 'send_money') {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/execute-task`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ intent, params })
+        });
+
+        if (!response.ok) {
+          throw new Error('Backend failed to process command');
+        }
+
+        const data = await response.json();
+        aiReply = data.readback || (intent === 'check_balance' ? `Your balance is ₹${state.accountBalance}` : "Task completed.");
+        
+        if (intent === 'check_balance') {
+           title = 'Check Account Balance';
+           details = `Available: ₹${state.accountBalance.toLocaleString()}.00`;
+           actionFn = () => { updateState({ isVoiceActive: false }); onNavigate('balance_detail'); };
+        } else if (intent === 'send_money') {
+           title = `Send ₹${params.amount} to ${params.contact_name}`;
+           details = `Debiting from Pension Account •••• 4821`;
+           const payee = MOCK_PAYEES.find(p => p.name === params.contact_name) || MOCK_PAYEES[0];
+           actionFn = () => {
+             updateState({
+               selectedPayee: payee,
+               transferAmount: params.amount,
+               voiceTranscript: spokenText,
+               currentView: 'confirm_transfer',
+               isVoiceActive: false
+             });
+           };
+        }
+      } else {
+        if (intent === 'show_statement') {
+           title = 'View Passbook & Statement';
+           details = 'Reviewing recent credits and debits';
+           aiReply = "Opening your passbook statement.";
+           actionFn = () => { updateState({ isVoiceActive: false }); onNavigate('passbook'); };
+        } else if (intent === 'profile') {
+           title = 'Open Profile & Care Manager';
+           aiReply = "Opening profile and care manager.";
+           actionFn = () => { updateState({ isVoiceActive: false }); onNavigate('profile'); };
+        } else if (intent === 'contact') {
+           title = 'Open Trusted Contacts';
+           aiReply = "Showing trusted contacts.";
+           actionFn = () => { updateState({ isVoiceActive: false }); onNavigate('contacts'); };
+        } else if (intent === 'home') {
+           title = 'Return to Home';
+           aiReply = "Going to home dashboard.";
+           actionFn = () => { updateState({ isVoiceActive: false }); onNavigate('home'); };
+        } else {
+           throw new Error("Unknown intent");
+        }
       }
       
-      setRecognizedAction({
-        type: data.intent || 'unknown',
-        title,
-        details,
-        action: actionFn
-      });
+      setAiSpokenReply(aiReply);
+      setRecognizedAction({ type: intent, title, details, action: actionFn });
 
       setIsSpeakingResponse(true);
       speakEnglish(aiReply, () => {
@@ -100,74 +123,82 @@ export function VoiceAssistantOverlay({ state, updateState, onNavigate }) {
   }, [state.accountBalance, updateState, onNavigate]);
 
   const stopListening = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-       mediaRecorderRef.current.stop();
+    if (recognitionRef.current) {
+       recognitionRef.current.stop();
        setIsListening(false);
-       setStatusMessage('Transcribing with OpenAI Whisper...');
+       setStatusMessage('Processing your command...');
     }
   }, []);
 
-  // Start recording using MediaRecorder for OpenAI Whisper API
-  const startListening = useCallback(async () => {
+  const startListening = useCallback(() => {
     stopSpeaking();
     soundFX.playMicStart();
     setIsListening(true);
-    setStatusMessage('Listening carefully via Whisper. Tap the mic to stop...');
+    setStatusMessage('Listening carefully. Tap the mic to stop...');
     setTranscript('');
+    setInterimTranscript('');
     setAiSpokenReply('');
     setRecognizedAction(null);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      const audioChunks = [];
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (e) {}
+      }
 
-      mediaRecorder.addEventListener("dataavailable", event => {
-        audioChunks.push(event.data);
-      });
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        setStatusMessage('Speech recognition not supported in this browser.');
+        setIsListening(false);
+        return;
+      }
 
-      mediaRecorder.addEventListener("stop", async () => {
-        // Stop all tracks to turn off the microphone light
-        stream.getTracks().forEach(track => track.stop());
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-IN'; // Or your preferred dialect
 
-        if (audioChunks.length === 0) return;
-        
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        
-        try {
-          const formData = new FormData();
-          formData.append("file", new File([audioBlob], "audio.webm", { type: "audio/webm" }));
-          
-          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
-          const response = await fetch(`${baseUrl}/api/transcribe`, {
-            method: "POST",
-            body: formData
-          });
+      recognition.onresult = (event) => {
+        let currentInterim = '';
+        let finalTranscript = '';
 
-          if (!response.ok) {
-            const errData = await response.text();
-            throw new Error(`API Error: ${response.status} ${errData}`);
-          }
-
-          const data = await response.json();
-          if (data.text) {
-             setTranscript(data.text);
-             processVoiceCommand(data.text);
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
           } else {
-             throw new Error("No text returned from Whisper API");
+            currentInterim += event.results[i][0].transcript;
           }
-        } catch (err) {
-           console.error("Whisper Error:", err);
-           setStatusMessage("Transcription failed. Tap to retry.");
         }
-      });
 
-      mediaRecorder.start();
+        setInterimTranscript(currentInterim);
+        
+        if (finalTranscript) {
+           setTranscript(finalTranscript);
+           processVoiceCommand(finalTranscript);
+           recognition.stop();
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error', event.error);
+        setIsListening(false);
+        if (event.error === 'not-allowed') {
+           setStatusMessage('Microphone access denied.');
+        } else {
+           setStatusMessage(`Transcription failed (${event.error}). Tap to retry.`);
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+
     } catch (err) {
       console.error('Microphone error:', err);
       setIsListening(false);
-      setStatusMessage('Microphone access denied or error.');
+      setStatusMessage(`Microphone error: ${err.message}`);
     }
   }, [processVoiceCommand]);
 
@@ -177,26 +208,27 @@ export function VoiceAssistantOverlay({ state, updateState, onNavigate }) {
       isNavigatingRef.current = false;
       startListening();
     } else {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
       }
       stopSpeaking();
     }
 
     return () => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
       }
       stopSpeaking();
     };
-  }, [state.isVoiceActive, startListening]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.isVoiceActive]);
 
   if (!state.isVoiceActive) return null;
 
   const handleClose = () => {
     stopSpeaking();
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
     }
     updateState({ isVoiceActive: false });
   };
@@ -300,15 +332,15 @@ export function VoiceAssistantOverlay({ state, updateState, onNavigate }) {
         </p>
 
         {/* Recognized Transcript or AI Spoken Response Card */}
-        {(transcript || aiSpokenReply) && (
+        {(transcript || interimTranscript || aiSpokenReply) && (
           <div className="w-full bg-white rounded-3xl p-5 shadow-md border border-slate-100 mb-6 text-left animate-in fade-in">
-            {transcript && (
+            {(transcript || interimTranscript) && (
               <div className="mb-3">
                 <span className="text-xs font-bold text-brand-teal flex items-center gap-1 mb-1">
                   <Mic size={14} /> You Spoke:
                 </span>
                 <p className="text-lg font-bold text-brand-text-dark leading-snug">
-                  "{transcript}"
+                  "{transcript || interimTranscript}"
                 </p>
               </div>
             )}
@@ -328,16 +360,6 @@ export function VoiceAssistantOverlay({ state, updateState, onNavigate }) {
                   <Volume2 size={14} /> Replay Voice Audio
                 </button>
               </div>
-            )}
-
-            {recognizedAction && (
-              <button
-                onClick={recognizedAction.action}
-                className="w-full mt-4 bg-brand-tangerine text-white py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 shadow-sm hover:bg-brand-tangerine-dark transition-colors"
-              >
-                Proceed to {recognizedAction.title}
-                <ArrowRight size={18} />
-              </button>
             )}
           </div>
         )}
