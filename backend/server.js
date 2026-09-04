@@ -4,7 +4,7 @@ const cors = require('cors');
 const { supabase, isConfigured, memoryStore } = require('./supabaseClient');
 const { computeFrictionScore } = require('./frictionScore');
 const { executeTask } = require('./taskExecutor');
-const { parseBankingIntent, generateText, streamText } = require('./geminiService');
+const { parseBankingIntent, generateText, streamText, transcribeAudio } = require('./geminiService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,7 +23,8 @@ const DEFAULT_USER_ID = 'e1111111-1111-1111-1111-111111111111';
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -307,6 +308,26 @@ app.post('/api/parse-intent', async (req, res) => {
   } catch (err) {
     console.error('[SAHAY-24] Parse Intent Error:', err.message);
     return res.status(500).json({ error: 'Failed to parse intent', details: err.message });
+  }
+});
+
+// ==========================================
+// Gemini Voice Transcription
+// Contract: POST /api/transcribe
+// { audioBase64: "...", mimeType: "audio/webm" }
+// ==========================================
+app.post('/api/transcribe', async (req, res) => {
+  const { audioBase64, mimeType } = req.body;
+  if (!audioBase64) {
+    return res.status(400).json({ error: 'Missing required field: audioBase64' });
+  }
+
+  try {
+    const text = await transcribeAudio(audioBase64, mimeType || 'audio/webm');
+    return res.json({ success: true, text });
+  } catch (err) {
+    console.error('[SAHAY-24] Transcribe Audio Error:', err.message);
+    return res.status(500).json({ error: 'Failed to transcribe audio', details: err.message });
   }
 });
 

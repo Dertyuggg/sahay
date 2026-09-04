@@ -13,6 +13,8 @@ export function VoiceAssistantOverlay({ state, updateState, onNavigate }) {
   const [recognizedAction, setRecognizedAction] = useState(null);
   
   const recognitionRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
   const isNavigatingRef = useRef(false);
 
   const processVoiceCommand = useCallback(async (spokenText) => {
@@ -24,30 +26,25 @@ export function VoiceAssistantOverlay({ state, updateState, onNavigate }) {
     setStatusMessage('Understanding what you need...');
 
     try {
-      let intent = 'unknown';
-      let params = { user_id: 'user_1' };
+      const parseResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/parse-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+
+      if (!parseResponse.ok) throw new Error('Failed to parse intent via Gemini');
+      
+      const parseData = await parseResponse.json();
+      if (!parseData.success || !parseData.result) throw new Error('Invalid intent response');
+
+      let { intent, params } = parseData.result;
+      if (!params) params = { user_id: 'user_1' };
+      if (!params.user_id) params.user_id = 'user_1';
+
       let aiReply = '';
       let title = 'Action';
       let details = '';
       let actionFn = () => {};
-
-      if (text.includes('balance')) {
-        intent = 'check_balance';
-      } else if (text.includes('send') || text.includes('transfer') || text.includes('pay')) {
-        intent = 'send_money';
-        const amountMatch = text.match(/\d+/);
-        params.amount = amountMatch ? parseInt(amountMatch[0], 10) : 500;
-        const matchedPayee = MOCK_PAYEES.find(p => text.includes(p.name.toLowerCase()));
-        params.contact_name = matchedPayee ? matchedPayee.name : 'Ananya';
-      } else if (text.includes('passbook') || text.includes('statement')) {
-        intent = 'show_statement';
-      } else if (text.includes('profile')) {
-        intent = 'profile';
-      } else if (text.includes('contact')) {
-        intent = 'contact';
-      } else if (text.includes('home')) {
-        intent = 'home';
-      }
 
       if (intent === 'check_balance' || intent === 'send_money') {
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/execute-task`, {
@@ -70,7 +67,7 @@ export function VoiceAssistantOverlay({ state, updateState, onNavigate }) {
         } else if (intent === 'send_money') {
            title = `Send ₹${params.amount} to ${params.contact_name}`;
            details = `Debiting from Pension Account •••• 4821`;
-           const payee = MOCK_PAYEES.find(p => p.name === params.contact_name) || MOCK_PAYEES[0];
+           const payee = MOCK_PAYEES.find(p => p.name.toLowerCase().includes(params.contact_name.toLowerCase())) || MOCK_PAYEES[0];
            actionFn = () => {
              updateState({
                selectedPayee: payee,
@@ -123,14 +120,18 @@ export function VoiceAssistantOverlay({ state, updateState, onNavigate }) {
   }, [state.accountBalance, updateState, onNavigate]);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+       mediaRecorderRef.current.stop();
+       setIsListening(false);
+       setStatusMessage('Processing your voice command...');
+    } else if (recognitionRef.current) {
        recognitionRef.current.stop();
        setIsListening(false);
        setStatusMessage('Processing your command...');
     }
   }, []);
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     stopSpeaking();
     soundFX.playMicStart();
     setIsListening(true);
@@ -141,59 +142,57 @@ export function VoiceAssistantOverlay({ state, updateState, onNavigate }) {
     setRecognizedAction(null);
 
     try {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch (e) {}
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
       }
 
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        setStatusMessage('Speech recognition not supported in this browser.');
-        setIsListening(false);
-        return;
-      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
 
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-IN'; // Or your preferred dialect
-
-      recognition.onresult = (event) => {
-        let currentInterim = '';
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          } else {
-            currentInterim += event.results[i][0].transcript;
-          }
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
         }
+      };
 
-        setInterimTranscript(currentInterim);
+      mediaRecorder.onstop = async () => {
+        setStatusMessage('Transcribing audio with Gemini...');
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         
-        if (finalTranscript) {
-           setTranscript(finalTranscript);
-           processVoiceCommand(finalTranscript);
-           recognition.stop();
-        }
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          try {
+            const base64AudioMessage = reader.result.split(',')[1];
+            
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/transcribe`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audioBase64: base64AudioMessage, mimeType: 'audio/webm' })
+            });
+
+            if (!response.ok) throw new Error('Transcription failed');
+            
+            const data = await response.json();
+            if (data.text) {
+              setTranscript(data.text);
+              processVoiceCommand(data.text);
+            } else {
+              setStatusMessage('Could not hear anything clearly. Try again.');
+            }
+          } catch (err) {
+            console.error('Transcription error:', err);
+            setStatusMessage('Error transcribing audio. Tap to retry.');
+          }
+        };
+
+        // Release microphone tracks
+        stream.getTracks().forEach(track => track.stop());
       };
 
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error', event.error);
-        setIsListening(false);
-        if (event.error === 'not-allowed') {
-           setStatusMessage('Microphone access denied.');
-        } else {
-           setStatusMessage(`Transcription failed (${event.error}). Tap to retry.`);
-        }
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
 
     } catch (err) {
       console.error('Microphone error:', err);
@@ -215,6 +214,9 @@ export function VoiceAssistantOverlay({ state, updateState, onNavigate }) {
     }
 
     return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
@@ -227,6 +229,9 @@ export function VoiceAssistantOverlay({ state, updateState, onNavigate }) {
 
   const handleClose = () => {
     stopSpeaking();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
